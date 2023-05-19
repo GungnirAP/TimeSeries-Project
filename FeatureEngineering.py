@@ -30,7 +30,7 @@ class FeatureEngineering():
         calendar = RussianBusinessCalendar()
         holidays = [date.date() for date in calendar.get_holidays()]
 
-        self.list_of_custom_fe['holidays'] = self.series.index.isin(holidays)
+        self.list_of_custom_fe['holidays'] = 1 * self.series.index.isin(holidays)
         
         # weekdays
         self.list_of_custom_fe['weekdays'] = \
@@ -55,7 +55,7 @@ class FeatureEngineering():
                      'is_year_end',
                      'is_year_start']:
             self.list_of_custom_fe[type_] = \
-                            pd.Series(list(pd.Series(self.series.index).apply(lambda x: getattr(x, type_))),
+                            pd.Series(list(1 * pd.Series(self.series.index).apply(lambda x: getattr(x, type_))),
                                      index=self.series.index)
         
         # diffs from 1 to range_diff
@@ -104,8 +104,6 @@ class FeatureEngineering():
             series_tmp = target == label
             extracted_features_filtered = select_features(extracted_features, series_tmp)
             relevant_features = relevant_features.union(set(extracted_features_filtered.columns))
-            
-
             
         self.list_of_auto_fe = dict(extracted_features[list(relevant_features)])
         
