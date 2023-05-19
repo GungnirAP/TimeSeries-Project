@@ -5,11 +5,9 @@ Based on: https://github.com/denndimitrov/Timeseries/
 
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime
 
-import seaborn as sns
 from collections import Counter
-from matplotlib.ticker import MaxNLocator, FuncFormatter
 from Calendar import RussianBusinessCalendar
 
 
@@ -45,6 +43,10 @@ class AnomalyDetector(object):
         self.holidays = [date.date() for date in calendar.get_holidays()]
         self.holidays.append(datetime.strptime('10-11-2017', "%d-%m-%Y").date())
         self.holidays.append(datetime.strptime('10-10-2018', "%d-%m-%Y").date())
+
+        self.irregular_dates = None
+        # Empirically defined that many outliers occur in 52 and 13 weeks of year:
+        self.irregular_weeks = [13, 52]
 
     def one_pass(self, train_zone, prediction_zone, threshold=None, drift=None):
         """
@@ -121,32 +123,38 @@ class AnomalyDetector(object):
 
         return anomalies != 0
 
-    def detect_all(self, time_series):
+    def generate_calendar_features(self, time_series):
         data = pd.DataFrame(time_series, columns=["val"])
         data['date'] = data.index.date
         data['week_day'] = data['date'].apply(lambda x: x.weekday())
         data['month_day'] = data['date'].apply(lambda x: x.day)
         data['holiday'] = data['date'].apply(lambda x: x in self.holidays)
         data['week_of_year'] = [date.weekofyear for date in data.index]
+        return data
 
+    def fit(self, time_series):
+        data = self.generate_calendar_features(time_series)
         excluded_dates = data[(data.week_day.isin([5, 6]) | data['holiday'])].index
         first_outliers = self.detect(data.val.copy(), excluded_points=excluded_dates)
 
         data["is_anomaly"] = (first_outliers != 0).astype(int)
         
-        for num, day in enumerate(AnomalyDetector.count_anomaly(first_outliers, freq="days")):
+        self.irregular_dates = AnomalyDetector.filter_irregular_dates(first_outliers, freq="days")
+        output = self.generate_irregular_features(time_series)
+        return output
+
+    def generate_irregular_features(self, time_series):
+        data = self.generate_calendar_features(time_series)
+        for num, day in enumerate(self.irregular_dates):
             data[f"irregular_date_{num}"] = data["month_day"].apply(lambda x: x == day).astype(int)
-
-        # Empirically defined that many outliers occur in 52 and 13 weeks of year:
-        excluded_weeks = [13, 52]
-        for num, week in enumerate(excluded_weeks):
+        for num, week in enumerate(self.irregular_weeks):
             data[f"irregular_week_{num}"] = data["week_of_year"].apply(lambda x: x == week).astype(int)
-
         data.drop(columns=["date", "week_day", "month_day", "holiday", "week_of_year"], inplace=True)
         return data
 
+
     @staticmethod
-    def count_anomaly(is_outlier, th=0.5, freq="days"):
+    def filter_irregular_dates(is_outlier, th=0.5, freq="days"):
         if freq == "days":
             anomaly_idx = [i.day for i in is_outlier[is_outlier].index]
         elif freq == "week_days":
