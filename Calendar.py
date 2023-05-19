@@ -10,7 +10,4 @@ class RussianBusinessCalendar(AbstractHolidayCalendar):
         self.russian_calendar = {"holidays": pd.to_datetime(russian_calendar['date'])}
         
     def get_holidays(self):
-        rules = [Holiday(name='Russian Day Off', year=d.year, month=d.month, day=d.day) 
-                 for d in self.russian_calendar['holidays']
-                ]
-        return rules
+        return self.russian_calendar["holidays"]
