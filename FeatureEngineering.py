@@ -11,6 +11,8 @@ from tsfresh.feature_extraction import settings
 
 from tqdm.notebook import tqdm
 
+from Calendar import RussianBusinessCalendar
+
 
 class FeatureEngineering():
     def __init__(self, series):
@@ -50,6 +52,11 @@ class FeatureEngineering():
         # lags from 1 to range_lags
         for i in range(1, range_lags+1):
             self.list_of_custom_fe[f'lag_{i}'] = self.series.shift(i).fillna(0)
+            
+        calendar = RussianBusinessCalendar()
+        holidays = [date.date() for date in calendar.get_holidays()]
+
+        self.list_of_custom_fe['holidays'] = self.series.index.isin(holidays)
         
         # rolling window stats from 2 to range_ma
         for i in range(2, range_ma+1):
@@ -72,7 +79,7 @@ class FeatureEngineering():
             
     def auto_fe(self):
         # use tsfresh
-        tmp = pd.DataFrame(self.series, columns=['Balance']).reset_index(drop=True).reset_index()
+        tmp = pd.DataFrame(list(self.series), columns=['Balance']).reset_index(drop=True).reset_index()
         tmp['index'] = tmp['index'].astype(object)
         settings_efficient = settings.EfficientFCParameters()
         extracted_features = extract_features(tmp, column_id='index', column_value="Balance",\
