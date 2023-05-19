@@ -72,7 +72,7 @@ class FeatureEngineering():
         for i in range(2, range_ma+1):
             self.list_of_custom_fe[f'median_{i}'] = self.series.rolling(i, min_periods=1).median()
             self.list_of_custom_fe[f'mean_{i}'] = self.series.rolling(i, min_periods=1).mean()
-            self.list_of_custom_fe[f'std_{i}'] = self.series.rolling(i, min_periods=1).std()
+            self.list_of_custom_fe[f'std_{i}'] = self.series.rolling(i, min_periods=1).std().fillna(0)
             self.list_of_custom_fe[f'max_{i}'] = self.series.rolling(i, min_periods=1).max()
             self.list_of_custom_fe[f'min_{i}'] = self.series.rolling(i, min_periods=1).min()
             
