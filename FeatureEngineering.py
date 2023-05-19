@@ -51,9 +51,18 @@ class FeatureEngineering():
         for i in range(1, range_lags+1):
             self.list_of_custom_fe[f'lag_{i}'] = self.series.shift(i).fillna(0)
         
-        # MA from 2 to range_ma
+        # rolling window stats from 2 to range_ma
         for i in range(2, range_ma+1):
+            # MA
             self.list_of_custom_fe[f'ma_{i}'] = self.series.rolling(i, min_periods=1).mean()
+            # median
+            self.list_of_custom_fe[f'ma_{i}'] = self.series.rolling(i, min_periods=1).median()
+            # std
+            self.list_of_custom_fe[f'ma_{i}'] = self.series.rolling(i, min_periods=1).std()
+            # max
+            self.list_of_custom_fe[f'ma_{i}'] = self.series.rolling(i, min_periods=1).max()
+            # min
+            self.list_of_custom_fe[f'ma_{i}'] = self.series.rolling(i, min_periods=1).min()
             
         # fourier transform
         for order in range(1, fourier_order+1):
