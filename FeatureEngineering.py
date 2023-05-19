@@ -15,8 +15,8 @@ from Calendar import RussianBusinessCalendar
 
 
 class FeatureEngineering():
-    def __init__(self, series):
-        self.series = series
+    def __init__(self):
+        self.series = None
         self.list_of_custom_fe = dict()
         self.list_of_auto_fe = dict()
         
@@ -65,8 +65,6 @@ class FeatureEngineering():
         # lags from 1 to range_lags
         for i in range(1, range_lags+1):
             self.list_of_custom_fe[f'lag_{i}'] = self.series.shift(i).fillna(0)
-            
-        
         
         # rolling window stats from 2 to range_ma
         for i in range(2, range_ma+1):
@@ -108,10 +106,17 @@ class FeatureEngineering():
         self.list_of_auto_fe = dict(extracted_features[list(relevant_features)])
         
         
-    def get_features(self):
+    def get_features(self, series, relevant_columns=[]):
+        self.series = series
+        self.list_of_custom_fe = dict()
+        self.list_of_auto_fe = dict()
+        
         self.custom_fe()
         self.auto_fe()
         features = pd.DataFrame({**self.list_of_custom_fe, **self.list_of_auto_fe}).iloc[:-1]
         # Remove duplicates
+        features = pd.concat([features, pd.DataFrame(list(self.series[:-1]), columns=['Balance'], index=self.series.index[:-1])], axis=1)
         features = features.T.drop_duplicates().T
+        if relevant_columns:
+            features = features[relevant_columns]
         return features
