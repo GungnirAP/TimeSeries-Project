@@ -11,6 +11,8 @@ from tsfresh.feature_extraction import settings
 
 from tqdm.notebook import tqdm
 
+from Calendar import RussianBusinessCalendar
+
 
 class FeatureEngineering():
     def __init__(self, series):
@@ -24,24 +26,37 @@ class FeatureEngineering():
                         pd.Series(list(pd.Series(self.series.index).apply(lambda x: np.tan(x.day_of_week / 7))),
                                  index=self.series.index)
         
+        # holidays
+        calendar = RussianBusinessCalendar()
+        holidays = [date.date() for date in calendar.get_holidays()]
+
+        self.list_of_custom_fe['holidays'] = 1 * self.series.index.isin(holidays)
+        
         # weekdays
         self.list_of_custom_fe['weekdays'] = \
                         pd.Series(list(pd.Series(self.series.index).apply(lambda x: 1 if x.day_of_week == 6 or x.day_of_week == 7 else 0)),
-                                 index=self.series.index)
-        # month
-        self.list_of_custom_fe['month'] = \
-                        pd.Series(list(pd.Series(self.series.index).apply(lambda x: x.month)),
-                                 index=self.series.index)
-        
-        # quarter
-        self.list_of_custom_fe['quarter'] = \
-                        pd.Series(list(pd.Series(self.series.index).apply(lambda x: x.quarter)),
                                  index=self.series.index)
         
         # taxes day
         self.list_of_custom_fe['taxes_day'] = \
                             pd.Series(list(pd.Series(self.series.index).apply(lambda x: 1 if x.day == 28 else 0)),
                                       index=self.series.index)
+        
+        # features from dates
+        for type_ in ['month', 'quarter', 
+                      'year', 'weekofyear', 
+                      'day_of_year', 
+                      'daysinmonth', 
+                      'is_leap_year',
+                     'is_month_end',
+                     'is_month_start',
+                     'is_quarter_end',
+                     'is_quarter_start',
+                     'is_year_end',
+                     'is_year_start']:
+            self.list_of_custom_fe[type_] = \
+                            pd.Series(list(1 * pd.Series(self.series.index).apply(lambda x: getattr(x, type_))),
+                                     index=self.series.index)
         
         # diffs from 1 to range_diff
         for i in range(1, range_diff+1):
@@ -50,10 +65,16 @@ class FeatureEngineering():
         # lags from 1 to range_lags
         for i in range(1, range_lags+1):
             self.list_of_custom_fe[f'lag_{i}'] = self.series.shift(i).fillna(0)
+            
         
-        # MA from 2 to range_ma
+        
+        # rolling window stats from 2 to range_ma
         for i in range(2, range_ma+1):
-            self.list_of_custom_fe[f'ma_{i}'] = self.series.rolling(i, min_periods=1).mean()
+            self.list_of_custom_fe[f'median_{i}'] = self.series.rolling(i, min_periods=1).median()
+            self.list_of_custom_fe[f'mean_{i}'] = self.series.rolling(i, min_periods=1).mean()
+            self.list_of_custom_fe[f'std_{i}'] = self.series.rolling(i, min_periods=1).std().fillna(0)
+            self.list_of_custom_fe[f'max_{i}'] = self.series.rolling(i, min_periods=1).max()
+            self.list_of_custom_fe[f'min_{i}'] = self.series.rolling(i, min_periods=1).min()
             
         # fourier transform
         for order in range(1, fourier_order+1):
@@ -63,7 +84,7 @@ class FeatureEngineering():
             
     def auto_fe(self):
         # use tsfresh
-        tmp = pd.DataFrame(self.series, columns=['Balance']).reset_index(drop=True).reset_index()
+        tmp = pd.DataFrame(list(self.series), columns=['Balance']).reset_index(drop=True).reset_index()
         tmp['index'] = tmp['index'].astype(object)
         settings_efficient = settings.EfficientFCParameters()
         extracted_features = extract_features(tmp, column_id='index', column_value="Balance",\
@@ -83,8 +104,6 @@ class FeatureEngineering():
             series_tmp = target == label
             extracted_features_filtered = select_features(extracted_features, series_tmp)
             relevant_features = relevant_features.union(set(extracted_features_filtered.columns))
-            
-
             
         self.list_of_auto_fe = dict(extracted_features[list(relevant_features)])
         
