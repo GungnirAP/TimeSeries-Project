@@ -31,7 +31,8 @@ class Model:
             preds = self.model.predict(n_periods=horizon, X=X.drop(columns=self.main_column))
             preds.index = preds.index - pd.Timedelta(days=1)
         elif self.model_type in ["LinearRegression", "Lasso", "Ridge", "ElasticNet"]:
-            preds = pd.Series(self.model.predict(pd.DataFrame(X.iloc[-1]).T), index=[X.index[-1]])
+            X = pd.DataFrame(X).T
+            preds = pd.Series(self.model.predict(X), index=[X.index[-1]])
         return preds
     
     def fit(self, X, y):
@@ -107,6 +108,7 @@ class ModelSelector:
         self.pnl_score = pnl_score
         self.available_models = ["SARIMA", "SARIMAX", "LinearRegression", "Lasso", "Ridge", "ElasticNet"]
 
+
     def select_model(self, X, y, train_index, val_index):
         best_models = {name : Model(name, self.scoring) for name in self.available_models}
 
@@ -117,10 +119,10 @@ class ModelSelector:
         all_scores = {name : [] for name in self.available_models}
         for date in tqdm(val_index):
             for name, best_model in best_models.items():
-                prediction = best_model.predict(X[:date], horizon=1)
+                prediction = best_model.predict(X.loc[date], horizon=1)
                 score = self.pnl_score(y[date], prediction)
                 all_scores[name].append(score)
-                best_model.fit(X[:date], y[:date])
+                best_model.fit(X.loc[:date], y[:date])
 
         best_score, best_type, best_hyperparameters = -1, None, None
         for name, scores in tqdm(all_scores.items()):
