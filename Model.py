@@ -32,47 +32,60 @@ class Machinery:
         self.feature_selector = FeatureSelector(scoring=scoring, k_folds=5, k_features=50)
         self.model_selector = ModelSelector(scoring=scoring)
         
-    def finetune(self, income, outcome, target):
+
+    def __generate_irregular_features(self, time_series, irregular_dates, irregular_weeks):
+        data = self.anomaly_detector['income'].generate_calendar_features(time_series)
+        for num, day in enumerate(irregular_dates):
+            data[f"irregular_date_{num}"] = data["month_day"].apply(lambda x: x == day).astype(int)
+        for num, week in enumerate(irregular_weeks):
+            data[f"irregular_week_{num}"] = data["week_of_year"].apply(lambda x: x == week).astype(int)
+        data.drop(columns=["val", "date", "week_day", "month_day", "holiday", "week_of_year"], inplace=True)
+        return data
+
+    def finetune(self, income, outcome, target, val_size=49):
         # Preprocessing
         income = self.preprocessor.preprocess(income)
         outcome = self.preprocessor.preprocess(outcome)
         time_series = income - outcome
 
-        # разбить на трейн вал
+        train_index = income[:-val_size].index
+        val_index = income[-val_size:].index
 
         # Anomalies detection
-        income = self.anomaly_detector["income"].fit(income)
-        outcome = self.anomaly_detector["outcome"].fit(outcome)
-        anomaly_features = pd.concat([income, outcome], axis=1).drop(columns=["val"])
-        anomaly_features = anomaly_features.T.drop_duplicates().T
-        anomaly_features.columns = [col + f"_{num}" for num, col in enumerate(anomaly_features.columns)] 
-        raw_names = sorted(anomaly_features.columns)
-        dates, weeks = 0, 0
-        for name in raw_names:
-            dates += 1 if name.find("date") > -1 else 0
-            weeks += 1 if name.find("week") > -1 else 0
-        columns = [f"irregular_date_{i}" for i in range(dates)]
-        columns += [f"irregular_week_{i}" for i in range(weeks)]
-        anomaly_features.columns = columns        
+        self.anomaly_detector["income"].fit(income[train_index])
+        self.anomaly_detector["outcome"].fit(outcome[train_index])
+        all_irregular_dates = set(self.anomaly_detector["income"].irregular_dates)
+        all_irregular_dates = all_irregular_dates.union(set(self.anomaly_detector["outcome"].irregular_dates))
+        all_irregular_weeks = self.anomaly_detector["income"].irregular_weeks
+        anomaly_features = self.__generate_irregular_features(income, all_irregular_dates, all_irregular_weeks)
+        # anomaly_features = pd.concat([income, outcome], axis=1).drop(columns=["val"])
+        # anomaly_features = anomaly_features.T.drop_duplicates().T
+        # anomaly_features.columns = [col + f"_{num}" for num, col in enumerate(anomaly_features.columns)] 
+        # raw_names = sorted(anomaly_features.columns)
+        # dates, weeks = 0, 0
+        # for name in raw_names:
+        #     dates += 1 if name.find("date") > -1 else 0
+        #     weeks += 1 if name.find("week") > -1 else 0
+        # columns = [f"irregular_date_{i}" for i in range(dates)]
+        # columns += [f"irregular_week_{i}" for i in range(weeks)]
+        # anomaly_features.columns = columns        
 
         # Feature Engineering
-        features = self.feature_generator.get_features(time_series)
-        data = pd.concat([features, anomaly_features], axis=1)
-        data = data.T.drop_duplicates().T
+        features = self.feature_generator.get_features(time_series[train_index])
+        train_data = pd.concat([features, anomaly_features], axis=1)
+        train_data = train_data.T.drop_duplicates().T
 
         # Feature selection
-        self.features_names = self.feature_selector.select_features(data, target)
-        data = data[self.features_names]
+        self.features_names = self.feature_selector.select_features(train_data, target[train_index])
 
         # Model Selection
-        # на трейне отобрали faeture names (все выше на трейне)
-        # сгенерили фичи заново для train+val (AD + FE)
-        # data = data[self.features_names] (FS)
-        # на трейне подобрали гиперы
-        # на вале выбрали топ модель
-        # калибруем на трейн+вал
-        self.Model = self.model_selector.select_model(data, target)
-        self.calibrate_model(data, target)
+        
+        features = self.feature_generator.get_features(time_series)
+        val_data = pd.concat([features, anomaly_features], axis=1)
+        val_data = val_data.T.drop_duplicates().T
+        val_data = val_data[self.features_names]
+        self.Model = self.model_selector.select_model(val_data, target, train_index, val_index)
+        self.calibrate_model(val_data, target)
         return self.Model
 
     def calibrate_model(self, X, y):

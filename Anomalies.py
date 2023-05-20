@@ -140,18 +140,8 @@ class AnomalyDetector(object):
         data["is_anomaly"] = (first_outliers != 0).astype(int)
         
         self.irregular_dates = AnomalyDetector.filter_irregular_dates(first_outliers, freq="days")
-        output = self.generate_irregular_features(time_series)
-        return output
-
-    def generate_irregular_features(self, time_series):
-        data = self.generate_calendar_features(time_series)
-        for num, day in enumerate(self.irregular_dates):
-            data[f"irregular_date_{num}"] = data["month_day"].apply(lambda x: x == day).astype(int)
-        for num, week in enumerate(self.irregular_weeks):
-            data[f"irregular_week_{num}"] = data["week_of_year"].apply(lambda x: x == week).astype(int)
-        data.drop(columns=["date", "week_day", "month_day", "holiday", "week_of_year"], inplace=True)
-        return data
-
+        # output = self.generate_irregular_features(time_series)
+        # return output
 
     @staticmethod
     def filter_irregular_dates(is_outlier, th=0.5, freq="days"):
