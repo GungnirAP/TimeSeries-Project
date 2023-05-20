@@ -1,5 +1,5 @@
 import numpy as np
-import pandas as pd
+# import pandas as pd
 
 import pmdarima as pm
 
@@ -67,15 +67,19 @@ class ModelSelector:
             best_model.optimize_hyperparameters(X[train_index], y[train_index])
             best_model.fit(X[train_index], y[train_index])
 
-        scores = []
+        all_scores = {name : [] for name in self.available_models}
         for date in val_index:
-            for _, best_model in best_models.items():
+            for name, best_model in best_models.items():
                 prediction = best_model.predict(X[:date], horizon=1)
                 score = self.pnl_score(y[date], prediction)
-                scores.append(score)
+                all_scores[name].append(score)
                 best_model.fit(X[:date], y[:date])
 
-        scores = np.array(scores)
-        
+        best_score, best_type, best_hyperparameters = -1, None, None
+        for name, scores in all_scores:
+            score = np.array(scores).mean()
+            if score > best_score:
+                best_type = name
+                best_hyperparameters = best_models[name].hyperparameters
 
-        return Model()
+        return Model(model_type=best_type, hyparameters=best_hyperparameters)
