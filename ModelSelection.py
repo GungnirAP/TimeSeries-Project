@@ -5,6 +5,7 @@ from sklearn.preprocessing import StandardScaler
 
 import pmdarima as pm
 from sklearn.linear_model import LinearRegression, Lasso, Ridge, ElasticNet
+from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.model_selection import GridSearchCV
 from sklearn import svm
 
@@ -32,10 +33,11 @@ class Model:
             X = X.drop(columns=self.main_column)
             X = pd.DataFrame(X).T
             preds = self.model.predict(n_periods=horizon, X=X)
-        elif self.model_type in ["LinearRegression", "Lasso", "Ridge", "ElasticNet", "SVM"]:
+        elif self.model_type in ["LinearRegression", "Lasso", "Ridge", "ElasticNet", "SVM", "GradientBoostingRegressor"]:
             X = pd.DataFrame(X).T
             index = [X.index[-1]]
-            X = self.pipeline.transform(X)
+            if self.model_type != "GradientBoostingRegressor":
+                X = self.pipeline.transform(X)
             preds = pd.Series(self.model.predict(X), index=index)
         return preds
     
@@ -77,6 +79,9 @@ class Model:
             self.pipeline.fit(X)
             X =self.pipeline.transform(X)
             self.model.fit(X, y)
+        elif self.model_type == "GradientBoostingRegressor":
+            self.model = GradientBoostingRegressor(**self.hyperparameters)
+            self.model.fit(X, y)
             
         return self.model
 
@@ -96,7 +101,7 @@ class Model:
         elif self.model_type == "LinearRegression":
             self.model = LinearRegression()
             parameters = {"fit_intercept":[False, True]}
-            grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=-1)
+            grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=-1, scoring=self.scoring)
             self.pipeline = StandardScaler()
             self.pipeline.fit(X)
             X =self.pipeline.transform(X)
@@ -106,7 +111,7 @@ class Model:
             self.model = Lasso()
             parameters = {"alpha":np.logspace(-5, 1, 19),
                           "fit_intercept":[False, True]}
-            grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=-1)
+            grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=-1, scoring=self.scoring)
             self.pipeline = StandardScaler()
             self.pipeline.fit(X)
             X =self.pipeline.transform(X)
@@ -117,7 +122,7 @@ class Model:
             parameters = {"alpha":np.logspace(-5, 2, 23),
                          "fit_intercept":[False, True],
                          "solver":["auto", "svd", "cholesky"]}
-            grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=-1)
+            grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=-1, scoring=self.scoring)
             self.pipeline = StandardScaler()
             self.pipeline.fit(X)
             X =self.pipeline.transform(X)
@@ -128,7 +133,7 @@ class Model:
             parameters = {"alpha":np.logspace(-5, 2, 8),
                          "l1_ratio":np.linspace(0, 1, 11),
                          "fit_intercept":[False, True]}
-            grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=-1)
+            grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=-1, scoring=self.scoring)
             self.pipeline = StandardScaler()
             self.pipeline.fit(X)
             X =self.pipeline.transform(X)
@@ -138,19 +143,28 @@ class Model:
             self.model = svm.SVR()
             parameters = {"kernel": ["linear", "poly", "rbf", "sigmoid"],
                          "degree": range(1, 6)}
-            grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=-1)
+            grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=-1, scoring=self.scoring)
             self.pipeline = StandardScaler()
             self.pipeline.fit(X)
             X = self.pipeline.transform(X)
             grid_GBR.fit(X, y)
             self.hyperparameters = grid_GBR.best_params_
+        elif self.model_type == "GradientBoostingRegressor":
+            self.model = GradientBoostingRegressor()
+            parameters = {"learning_rate":np.logspace(-2,0,3),
+                         "n_estimators":range(20, 101, 20)}
+            grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=-1, scoring=self.scoring)
+            grid_GBR.fit(X, y)
+            self.hyperparameters = grid_GBR.best_params_
+        
 
 
 class ModelSelector:
     def __init__(self, scoring, pnl_score):
         self.scoring = scoring
         self.pnl_score = pnl_score
-        self.available_models = ["SARIMA", "SARIMAX", "LinearRegression", "Lasso", "Ridge", "ElasticNet", "SVM"]
+        self.available_models = ["SARIMA", "SARIMAX", "LinearRegression", "Lasso", "Ridge"
+                                 , "ElasticNet", "SVM", "GradientBoostingRegressor"]
 
 
     def select_model(self, X, y, train_index, val_index):
