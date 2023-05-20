@@ -4,6 +4,7 @@ import pandas as pd
 import pmdarima as pm
 from sklearn.linear_model import LinearRegression, Lasso, Ridge, ElasticNet
 from sklearn.model_selection import GridSearchCV
+from sklearn import svm
 
 from tqdm import tqdm
 
@@ -30,7 +31,7 @@ class Model:
         elif self.model_type == "SARIMAX":
             preds = self.model.predict(n_periods=horizon, X=X.drop(columns=self.main_column))
             preds.index = preds.index - pd.Timedelta(days=1)
-        elif self.model_type in ["LinearRegression", "Lasso", "Ridge", "ElasticNet"]:
+        elif self.model_type in ["LinearRegression", "Lasso", "Ridge", "ElasticNet", "SVM"]:
             X = pd.DataFrame(X).T
             preds = pd.Series(self.model.predict(X), index=[X.index[-1]])
         return preds
@@ -54,6 +55,9 @@ class Model:
             self.model.fit(X, y)
         elif self.model_type == "ElasticNet":
             self.model = ElasticNet(**self.hyperparameters)
+            self.model.fit(X, y)
+        elif self.model_type == "SVM":
+            self.model = svm.SVR(**self.hyperparameters)
             self.model.fit(X, y)
             
         return self.model
@@ -100,13 +104,20 @@ class Model:
             grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=-1)
             grid_GBR.fit(X, y)
             self.hyperparameters = grid_GBR.best_params_
+        elif self.model_type == "SVM":
+            self.model = svm.SVR()
+            parameters = {"kernel": ["linear", "poly", "rbf", "sigmoid"],
+                         "degree":np.linspace(1, 5, 5)}
+            grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=-1)
+            grid_GBR.fit(X, y)
+            self.hyperparameters = grid_GBR.best_params_
 
 
 class ModelSelector:
     def __init__(self, scoring, pnl_score):
         self.scoring = scoring
         self.pnl_score = pnl_score
-        self.available_models = ["SARIMA", "SARIMAX", "LinearRegression", "Lasso", "Ridge", "ElasticNet"]
+        self.available_models = ["SARIMA", "SARIMAX", "LinearRegression", "Lasso", "Ridge", "ElasticNet", "SVM"]
 
 
     def select_model(self, X, y, train_index, val_index):
