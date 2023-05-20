@@ -29,10 +29,10 @@ class Model:
         series = X[self.main_column]
         if self.model_type == "SARIMA":
             preds = self.model.predict(n_periods=horizon)
-            preds.index = preds.index - pd.Timedelta(days=1)
         elif self.model_type == "SARIMAX":
-            preds = self.model.predict(n_periods=horizon, X=X.drop(columns=self.main_column))
-            preds.index = preds.index - pd.Timedelta(days=1)
+            X = X.drop(columns=self.main_column)
+            X = pd.DataFrame(X).T
+            preds = self.model.predict(n_periods=horizon, X=X)
         elif self.model_type in ["LinearRegression", "Lasso", "Ridge", "ElasticNet", "SVM"]:
             X = pd.DataFrame(X).T
             self.pipeline.transform(X)
