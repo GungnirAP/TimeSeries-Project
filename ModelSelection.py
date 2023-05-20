@@ -1,6 +1,9 @@
 import numpy as np
 import pandas as pd
 
+from sklearn.linear_model import LinearRegression, Lasso, Ridge, ElasticNet
+from sklearn.model_selection import GridSearchCV
+
 import pmdarima as pm
 
 class Model:
@@ -24,6 +27,8 @@ class Model:
         elif self.model_type == "SARIMAX":
             preds = self.model.predict(n_periods=horizon, X=X.drop(columns=self.main_column))
             preds.index = preds.index - pd.Timedelta(days=1)
+        elif self.model_type == "LinearRegression":
+            preds = pd.Series(model.predict(pd.DataFrame(X.iloc[-1]).T), index=[X.index[-1]])
         return preds
     
     def fit(self, X, y):
@@ -34,6 +39,9 @@ class Model:
         elif self.model_type == "SARIMAX":
             self.model = pm.ARIMA(order=self.hyperparameters["order"])
             self.model.fit(series, X.drop(columns=self.main_column))
+        elif self.model_type == "LinearRegression":
+            self.model = LinearRegression(**self.hyperparameters)
+            self.model.fit(X, y)
             
         return self.model
 
@@ -51,12 +59,18 @@ class Model:
                                        seasonal=True, error_action='ignore', 
                                        suppress_warnings=True, stepwise=True)
             self.hyperparameters = {"order" : self.model.get_params()["order"]}
+        elif self.model_type == "LinearRegression":
+            self.model = LinearRegression()
+            parameters = {"fit_intercept":[False, True]}
+            grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=-1)
+            grid_GBR.fit(X, y)
+            self.hyperparameters = grid_GBR.best_params_
 
 
 class ModelSelector:
     def __init__(self, scoring):
         self.scoring = scoring
-        self.available_models = ["SARIMA", "SARIMAX"]
+        self.available_models = ["SARIMA", "SARIMAX", "LinearRegression"]
 
     def select_model(self, X, y, train_index, val_index):
         best_models = {name : Model(name) for name in self.available_models}
