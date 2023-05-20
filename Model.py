@@ -12,6 +12,7 @@ import numpy as np
 from datetime import datetime
 from sklearn.metrics import make_scorer, mean_absolute_error as MAE
 
+from Calendar import RussianBusinessCalendar
 from Preprocessing import Preprocessing
 from Anomalies import AnomalyDetector
 from FeatureEngineering import FeatureEngineering
@@ -20,8 +21,9 @@ from ModelSelection import ModelSelector
 
 
 class Machinery:
-    def __init__(self, scoring):
-        self.scoring = scoring
+    def __init__(self, score, scorer):
+        self.score = score
+        self.scorer = scorer
 
         self.Model = None
         self.features_names = None
@@ -29,16 +31,26 @@ class Machinery:
         self.anomaly_detector = {"income": AnomalyDetector(),
                                  "outcome": AnomalyDetector(),}
         self.feature_generator = FeatureEngineering()
-        self.feature_selector = FeatureSelector(scoring=scoring, k_folds=5, k_features=50)
-        self.model_selector = ModelSelector(scoring=scoring)
+        self.feature_selector = FeatureSelector(scoring=scorer, k_folds=5, k_features=50)
+        self.model_selector = ModelSelector(scoring=scorer, pnl_score=score)
+
+        calendar = RussianBusinessCalendar()
+        self.holidays = [date.date() for date in calendar.get_holidays()]
+        self.holidays.append(datetime.strptime('10-11-2017', "%d-%m-%Y").date())
+        self.holidays.append(datetime.strptime('10-10-2018', "%d-%m-%Y").date())
         
 
     def __generate_irregular_features(self, time_series, irregular_dates, irregular_weeks):
-        data = self.anomaly_detector['income'].generate_calendar_features(time_series)
-        for num, day in enumerate(irregular_dates):
-            data[f"irregular_date_{num}"] = data["month_day"].apply(lambda x: x == day).astype(int)
-        for num, week in enumerate(irregular_weeks):
-            data[f"irregular_week_{num}"] = data["week_of_year"].apply(lambda x: x == week).astype(int)
+        data = pd.DataFrame(time_series, columns=["val"])
+        data['date'] = data.index.date
+        data['week_day'] = data['date'].apply(lambda x: x.weekday())
+        data['month_day'] = data['date'].apply(lambda x: x.day)
+        data['holiday'] = data['date'].apply(lambda x: x in self.holidays)
+        data['week_of_year'] = [date.weekofyear for date in data.index]
+        for day in irregular_dates:
+            data[f"irregular_date_{day}"] = data["month_day"].apply(lambda x: x == day).astype(int)
+        for week in irregular_weeks:
+            data[f"irregular_week_{week}"] = data["week_of_year"].apply(lambda x: x == week).astype(int)
         data.drop(columns=["val", "date", "week_day", "month_day", "holiday", "week_of_year"], inplace=True)
         return data
 
@@ -57,18 +69,7 @@ class Machinery:
         all_irregular_dates = set(self.anomaly_detector["income"].irregular_dates)
         all_irregular_dates = all_irregular_dates.union(set(self.anomaly_detector["outcome"].irregular_dates))
         all_irregular_weeks = self.anomaly_detector["income"].irregular_weeks
-        anomaly_features = self.__generate_irregular_features(income, all_irregular_dates, all_irregular_weeks)
-        # anomaly_features = pd.concat([income, outcome], axis=1).drop(columns=["val"])
-        # anomaly_features = anomaly_features.T.drop_duplicates().T
-        # anomaly_features.columns = [col + f"_{num}" for num, col in enumerate(anomaly_features.columns)] 
-        # raw_names = sorted(anomaly_features.columns)
-        # dates, weeks = 0, 0
-        # for name in raw_names:
-        #     dates += 1 if name.find("date") > -1 else 0
-        #     weeks += 1 if name.find("week") > -1 else 0
-        # columns = [f"irregular_date_{i}" for i in range(dates)]
-        # columns += [f"irregular_week_{i}" for i in range(weeks)]
-        # anomaly_features.columns = columns        
+        anomaly_features = self.__generate_irregular_features(income[train_index], all_irregular_dates, all_irregular_weeks)     
 
         # Feature Engineering
         features = self.feature_generator.get_features(time_series[train_index])
@@ -79,13 +80,14 @@ class Machinery:
         self.features_names = self.feature_selector.select_features(train_data, target[train_index])
 
         # Model Selection
-        
+        anomaly_features = self.__generate_irregular_features(income, all_irregular_dates, all_irregular_weeks)     
         features = self.feature_generator.get_features(time_series)
         val_data = pd.concat([features, anomaly_features], axis=1)
         val_data = val_data.T.drop_duplicates().T
         val_data = val_data[self.features_names]
         self.Model = self.model_selector.select_model(val_data, target, train_index, val_index)
         self.calibrate_model(val_data, target)
+        
         return self.Model
 
     def calibrate_model(self, X, y):
@@ -125,7 +127,7 @@ if __name__ == '__main__':
     pnl_scorer = make_scorer(pnl_score, greater_is_better=True, rates=rates)
     test_scores = []
 
-    machine = Machinery()
+    machine = Machinery(score=pnl_score, scorer=pnl_scorer)
     machine.finetune(income[train_dates], outcome[train_dates], target[train_dates])
     for date in test_dates:
         prediction = machine.predict(income[:date], outcome[:date], horizon=1)
@@ -141,4 +143,3 @@ if __name__ == '__main__':
     # TO DO:
     # Periodical finetune
     # Asap Finetune according to razladki points
-    # Refactor Machinery finetune
