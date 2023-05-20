@@ -21,7 +21,13 @@ class Model:
         self.model_type = model_type
         self.hyperparameters = hyparameters
         self.scoring = scoring
-
+        self.refit_every = None
+        if self.model_type in ["SARIMA", "SARIMAX"]:
+            self.refit_every = 1
+        elif self.model_type in ["LinearRegression", "Lasso", "Ridge", "ElasticNet", "SVM"
+                                 , "GradientBoostingRegressor", "RandomForestRegressor"]:
+            self.refit_every = 7
+        self.num_of_preds = self.refit_every
         self.model = None
         self.pipeline = None
 
@@ -30,7 +36,7 @@ class Model:
         if self.model_type == "SARIMA":
             preds = self.model.predict(n_periods=horizon)
         elif self.model_type == "SARIMAX":
-            X = X.drop(columns=self.main_column)
+            X = X.drop(self.main_column)
             X = pd.DataFrame(X).T
             preds = self.model.predict(n_periods=horizon, X=X)
         elif self.model_type in ["LinearRegression", "Lasso", "Ridge", "ElasticNet", "SVM"
@@ -40,53 +46,55 @@ class Model:
             if self.model_type not in ["GradientBoostingRegressor", "RandomForestRegressor"]:
                 X = self.pipeline.transform(X)
             preds = pd.Series(self.model.predict(X), index=index)
+        self.num_of_preds += 1
         return preds
     
     def fit(self, X, y):
         series = X[self.main_column]
-        if self.model_type == "SARIMA":
-            self.model = pm.ARIMA(order=self.hyperparameters["order"])
-            self.model.fit(series)
-        elif self.model_type == "SARIMAX":
-            self.model = pm.ARIMA(order=self.hyperparameters["order"])
-            self.model.fit(series, X.drop(columns=self.main_column))
-        elif self.model_type == "LinearRegression":
-            self.model = LinearRegression(**self.hyperparameters)
-            self.pipeline = StandardScaler()
-            self.pipeline.fit(X)
-            X =self.pipeline.transform(X)
-            self.model.fit(X, y)
-        elif self.model_type == "Lasso":
-            self.model = Lasso(**self.hyperparameters)
-            self.pipeline = StandardScaler()
-            self.pipeline.fit(X)
-            X =self.pipeline.transform(X)
-            self.model.fit(X, y)
-        elif self.model_type == "Ridge":
-            self.model = Ridge(**self.hyperparameters)
-            self.pipeline = StandardScaler()
-            self.pipeline.fit(X)
-            X =self.pipeline.transform(X)
-            self.model.fit(X, y)
-        elif self.model_type == "ElasticNet":
-            self.model = ElasticNet(**self.hyperparameters)
-            self.pipeline = StandardScaler()
-            self.pipeline.fit(X)
-            X =self.pipeline.transform(X)
-            self.model.fit(X, y)
-        elif self.model_type == "SVM":
-            self.model = svm.SVR(**self.hyperparameters)
-            self.pipeline = StandardScaler()
-            self.pipeline.fit(X)
-            X =self.pipeline.transform(X)
-            self.model.fit(X, y)
-        elif self.model_type == "GradientBoostingRegressor":
-            self.model = GradientBoostingRegressor(**self.hyperparameters)
-            self.model.fit(X, y)
-        elif self.model_type == "RandomForestRegressor":
-            self.model = RandomForestRegressor(**self.hyperparameters)
-            self.model.fit(X, y)
-            
+        if self.refit_every <= self.num_of_preds:
+            self.num_of_preds = 0
+            if self.model_type == "SARIMA":
+                self.model = pm.ARIMA(order=self.hyperparameters["order"])
+                self.model.fit(series)
+            elif self.model_type == "SARIMAX":
+                self.model = pm.ARIMA(order=self.hyperparameters["order"])
+                self.model.fit(series, X.drop(columns=self.main_column))
+            elif self.model_type == "LinearRegression":
+                self.model = LinearRegression(**self.hyperparameters)
+                self.pipeline = StandardScaler()
+                self.pipeline.fit(X)
+                X =self.pipeline.transform(X)
+                self.model.fit(X, y)
+            elif self.model_type == "Lasso":
+                self.model = Lasso(**self.hyperparameters)
+                self.pipeline = StandardScaler()
+                self.pipeline.fit(X)
+                X =self.pipeline.transform(X)
+                self.model.fit(X, y)
+            elif self.model_type == "Ridge":
+                self.model = Ridge(**self.hyperparameters)
+                self.pipeline = StandardScaler()
+                self.pipeline.fit(X)
+                X =self.pipeline.transform(X)
+                self.model.fit(X, y)
+            elif self.model_type == "ElasticNet":
+                self.model = ElasticNet(**self.hyperparameters)
+                self.pipeline = StandardScaler()
+                self.pipeline.fit(X)
+                X =self.pipeline.transform(X)
+                self.model.fit(X, y)
+            elif self.model_type == "SVM":
+                self.model = svm.SVR(**self.hyperparameters)
+                self.pipeline = StandardScaler()
+                self.pipeline.fit(X)
+                X =self.pipeline.transform(X)
+                self.model.fit(X, y)
+            elif self.model_type == "GradientBoostingRegressor":
+                self.model = GradientBoostingRegressor(**self.hyperparameters)
+                self.model.fit(X, y)
+            elif self.model_type == "RandomForestRegressor":
+                self.model = RandomForestRegressor(**self.hyperparameters)
+                self.model.fit(X, y)
         return self.model
 
     def optimize_hyperparameters(self, X, y):
@@ -167,7 +175,6 @@ class Model:
             grid_GBR.fit(X, y)
             self.hyperparameters = grid_GBR.best_params_
         
-
 
 class ModelSelector:
     def __init__(self, scoring, pnl_score):
