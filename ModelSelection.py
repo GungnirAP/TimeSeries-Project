@@ -5,7 +5,7 @@ from sklearn.preprocessing import StandardScaler
 
 import pmdarima as pm
 from sklearn.linear_model import LinearRegression, Lasso, Ridge, ElasticNet
-from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
 from sklearn.model_selection import GridSearchCV
 from sklearn import svm
 
@@ -33,10 +33,11 @@ class Model:
             X = X.drop(columns=self.main_column)
             X = pd.DataFrame(X).T
             preds = self.model.predict(n_periods=horizon, X=X)
-        elif self.model_type in ["LinearRegression", "Lasso", "Ridge", "ElasticNet", "SVM", "GradientBoostingRegressor"]:
+        elif self.model_type in ["LinearRegression", "Lasso", "Ridge", "ElasticNet", "SVM"
+                                 , "GradientBoostingRegressor", "RandomForestRegressor"]:
             X = pd.DataFrame(X).T
             index = [X.index[-1]]
-            if self.model_type != "GradientBoostingRegressor":
+            if self.model_type not in ["GradientBoostingRegressor", "RandomForestRegressor"]:
                 X = self.pipeline.transform(X)
             preds = pd.Series(self.model.predict(X), index=index)
         return preds
@@ -81,6 +82,9 @@ class Model:
             self.model.fit(X, y)
         elif self.model_type == "GradientBoostingRegressor":
             self.model = GradientBoostingRegressor(**self.hyperparameters)
+            self.model.fit(X, y)
+        elif self.model_type == "RandomForestRegressor":
+            self.model = RandomForestRegressor(**self.hyperparameters)
             self.model.fit(X, y)
             
         return self.model
@@ -156,6 +160,12 @@ class Model:
             grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=-1, scoring=self.scoring)
             grid_GBR.fit(X, y)
             self.hyperparameters = grid_GBR.best_params_
+        elif self.model_type == "RandomForestRegressor":
+            self.model = RandomForestRegressor()
+            parameters = {"n_estimators":range(20, 101, 20)}
+            grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=-1, scoring=self.scoring)
+            grid_GBR.fit(X, y)
+            self.hyperparameters = grid_GBR.best_params_
         
 
 
@@ -164,7 +174,8 @@ class ModelSelector:
         self.scoring = scoring
         self.pnl_score = pnl_score
         self.available_models = ["SARIMA", "SARIMAX", "LinearRegression", "Lasso", "Ridge"
-                                 , "ElasticNet", "SVM", "GradientBoostingRegressor"]
+                                 , "ElasticNet", "SVM", "GradientBoostingRegressor"
+                                 , "RandomForestRegressor"]
 
 
     def select_model(self, X, y, train_index, val_index):
