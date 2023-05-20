@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 
+from sklearn.preprocessing import StandardScaler
+
 import pmdarima as pm
 from sklearn.linear_model import LinearRegression, Lasso, Ridge, ElasticNet
 from sklearn.model_selection import GridSearchCV
@@ -33,6 +35,7 @@ class Model:
             preds.index = preds.index - pd.Timedelta(days=1)
         elif self.model_type in ["LinearRegression", "Lasso", "Ridge", "ElasticNet", "SVM"]:
             X = pd.DataFrame(X).T
+            self.pipeline.transform(X)
             preds = pd.Series(self.model.predict(X), index=[X.index[-1]])
         return preds
     
@@ -46,18 +49,33 @@ class Model:
             self.model.fit(series, X.drop(columns=self.main_column))
         elif self.model_type == "LinearRegression":
             self.model = LinearRegression(**self.hyperparameters)
+            self.pipeline = StandardScaler()
+            self.pipeline.fit(X)
+            self.pipeline.transform(X)
             self.model.fit(X, y)
         elif self.model_type == "Lasso":
             self.model = Lasso(**self.hyperparameters)
+            self.pipeline = StandardScaler()
+            self.pipeline.fit(X)
+            self.pipeline.transform(X)
             self.model.fit(X, y)
         elif self.model_type == "Ridge":
             self.model = Ridge(**self.hyperparameters)
+            self.pipeline = StandardScaler()
+            self.pipeline.fit(X)
+            self.pipeline.transform(X)
             self.model.fit(X, y)
         elif self.model_type == "ElasticNet":
             self.model = ElasticNet(**self.hyperparameters)
+            self.pipeline = StandardScaler()
+            self.pipeline.fit(X)
+            self.pipeline.transform(X)
             self.model.fit(X, y)
         elif self.model_type == "SVM":
             self.model = svm.SVR(**self.hyperparameters)
+            self.pipeline = StandardScaler()
+            self.pipeline.fit(X)
+            self.pipeline.transform(X)
             self.model.fit(X, y)
             
         return self.model
@@ -79,6 +97,9 @@ class Model:
             self.model = LinearRegression()
             parameters = {"fit_intercept":[False, True]}
             grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=-1)
+            self.pipeline = StandardScaler()
+            self.pipeline.fit(X)
+            self.pipeline.transform(X)
             grid_GBR.fit(X, y)
             self.hyperparameters = grid_GBR.best_params_
         elif self.model_type == "Lasso":
@@ -86,6 +107,9 @@ class Model:
             parameters = {"alpha":np.logspace(-5, 1, 19),
                           "fit_intercept":[False, True]}
             grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=-1)
+            self.pipeline = StandardScaler()
+            self.pipeline.fit(X)
+            self.pipeline.transform(X)
             grid_GBR.fit(X, y)
             self.hyperparameters = grid_GBR.best_params_
         elif self.model_type == "Ridge":
@@ -94,6 +118,9 @@ class Model:
                          "fit_intercept":[False, True],
                          "solver":["auto", "svd", "cholesky"]}
             grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=-1)
+            self.pipeline = StandardScaler()
+            self.pipeline.fit(X)
+            self.pipeline.transform(X)
             grid_GBR.fit(X, y)
             self.hyperparameters = grid_GBR.best_params_
         elif self.model_type == "ElasticNet":
@@ -102,6 +129,9 @@ class Model:
                          "l1_ratio":np.linspace(0, 1, 11),
                          "fit_intercept":[False, True]}
             grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=-1)
+            self.pipeline = StandardScaler()
+            self.pipeline.fit(X)
+            self.pipeline.transform(X)
             grid_GBR.fit(X, y)
             self.hyperparameters = grid_GBR.best_params_
         elif self.model_type == "SVM":
@@ -109,6 +139,9 @@ class Model:
             parameters = {"kernel": ["linear", "poly", "rbf", "sigmoid"],
                          "degree":np.linspace(1, 5, 5)}
             grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=-1)
+            self.pipeline = StandardScaler()
+            self.pipeline.fit(X)
+            self.pipeline.transform(X)
             grid_GBR.fit(X, y)
             self.hyperparameters = grid_GBR.best_params_
 
