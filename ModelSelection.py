@@ -29,8 +29,8 @@ class Model:
         elif self.model_type == "SARIMAX":
             preds = self.model.predict(n_periods=horizon, X=X.drop(columns=self.main_column))
             preds.index = preds.index - pd.Timedelta(days=1)
-        elif self.model_type == "LinearRegression":
-            preds = pd.Series(model.predict(pd.DataFrame(X.iloc[-1]).T), index=[X.index[-1]])
+        elif self.model_type in ["LinearRegression", "Lasso"]:
+            preds = pd.Series(self.model.predict(pd.DataFrame(X.iloc[-1]).T), index=[X.index[-1]])
         return preds
     
     def fit(self, X, y):
@@ -43,6 +43,9 @@ class Model:
             self.model.fit(series, X.drop(columns=self.main_column))
         elif self.model_type == "LinearRegression":
             self.model = LinearRegression(**self.hyperparameters)
+            self.model.fit(X, y)
+        elif self.model_type == "Lasso":
+            self.model = Lasso(**self.hyperparameters)
             self.model.fit(X, y)
             
         return self.model
@@ -66,13 +69,20 @@ class Model:
             grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=-1)
             grid_GBR.fit(X, y)
             self.hyperparameters = grid_GBR.best_params_
+        elif self.model_type == "Lasso":
+            self.model = Lasso()
+            parameters = {"alpha":np.logspace(-5, 0, 6),
+                          "fit_intercept":[False, True]}
+            grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=-1)
+            grid_GBR.fit(X, y)
+            self.hyperparameters = grid_GBR.best_params_
 
 
 class ModelSelector:
     def __init__(self, scoring, pnl_score):
         self.scoring = scoring
 
-        self.available_models = ["SARIMA", "SARIMAX", "LinearRegression"]
+        self.available_models = ["SARIMA", "SARIMAX", "LinearRegression", "Lasso"]
         self.pnl_score = pnl_score
 
     def select_model(self, X, y, train_index, val_index):
