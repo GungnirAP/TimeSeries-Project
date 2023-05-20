@@ -2,20 +2,22 @@
 Model Description:
 Assumptions:
     Input time-series is bounded from 2017-01-09 to 2021-03-31.
-    Metrics of model performance are measured for period from 2021-01-01 to 2021-03-21
-    if it is worked in inference mode.
+    Metrics of model performance are measured for period from 2021-01-01 to 2021-03-30,
+    simulated as it worked in inference mode.
     Rates are fixed for the whole period (training, validation, testing).
 '''
 
 import pandas as pd
+import numpy as np
 from datetime import datetime
-# from sklearn.metrics import mean_absolute_error as MAE
+from sklearn.metrics import make_scorer, mean_absolute_error as MAE
 
 from Preprocessing import Preprocessing
 from Anomalies import AnomalyDetector
 from FeatureEngineering import FeatureEngineering
 from FeatureSelection import FeatureSelector
 from ModelSelection import ModelSelector
+
 
 class Machinery:
     def __init__(self, scoring):
@@ -28,7 +30,7 @@ class Machinery:
                                  "outcome": AnomalyDetector(),}
         self.feature_generator = FeatureEngineering()
         self.feature_selector = FeatureSelector(scoring=scoring, k_folds=5, k_features=50)
-        self.model_selector = ModelSelector()
+        self.model_selector = ModelSelector(scoring=scoring)
         
     def finetune(self, income, outcome, target):
         # Preprocessing
@@ -63,9 +65,9 @@ class Machinery:
         data = data[self.features_names]
 
         # Model Selection
-        # на трейне отобрали faeture names (все ввыше на трейне)
-        # сгенерили заново для train+val 
-        # data = data[self.features_names]
+        # на трейне отобрали faeture names (все выше на трейне)
+        # сгенерили фичи заново для train+val (AD + FE)
+        # data = data[self.features_names] (FS)
         # на трейне подобрали гиперы
         # на вале выбрали топ модель
         # калибруем на трейн+вал
@@ -73,13 +75,25 @@ class Machinery:
         self.calibrate_model(data, target)
         return self.Model
 
-    def calibrate_model(self, data, target):
-        self.Model.fit(data, target)
+    def calibrate_model(self, X, y):
+        self.Model.fit(X, y)
         return self.Model
 
     def predict(self, X):
-        pass
-        # self.Model.predict(X)
+        return self.Model.predict(X)
+
+
+def pnl_score(y_true, y_predict, 
+              rates={"key_rate" : 7.25, 
+                     "deposit_rate" : -0.9, 
+                     "credit_rate" : 1.0, 
+                     "profit_rate" : 0.5}):
+    y_true = np.array(y_true)
+    y_predict = np.array(y_predict)
+    diffs = y_predict - y_true
+    multiplier = rates["profit_rate"] - (diffs > 0) * rates["credit_rate"] - (diffs < 0) * rates["deposit_rate"]
+    return (diffs * multiplier / 365).mean()
+
 
 if __name__ == '__main__':
     rates = pd.read_csv("./data/input_rates.csv", index_col=0).values
@@ -90,16 +104,28 @@ if __name__ == '__main__':
                        parse_dates=['Date'], date_parser=date_parser)
     df = df.set_index('Date')
     df.index.name = 'Date'
+    
+    train_dates, test_dates = df[:'2021-01-01'].index, df['2021-01-01':'2021-03-31'].index
+    income, outcome = df["Income"], df["Outcome"]
+    target = (df["Income"] - df["Outcome"]).shift(-1)[:-1]
 
-    test_dates = df['2021-01-01':].index
-    scores = []
+    pnl_scorer = make_scorer(pnl_score, greater_is_better=True, rates=rates)
+    test_scores = []
 
-    # scoring
-    # train_test_split
-    # machine = Machinery()
-    # machine.finetune(train)
-    # for date in test_dates:
-        # machine.predict(test[:date])
-        # score = согласно скорингу
-        # scores.append((date, score))
-        # machine.calibrate_model(new_train)
+    machine = Machinery()
+    machine.finetune(income[train_dates], outcome[train_dates], target[train_dates])
+    for date in test_dates:
+        prediction = machine.predict(income[:date], outcome[:date], horizon=1)
+        score = pnl_score(target[date], prediction)
+        mae_error = MAE(target[date], prediction)
+        test_scores.append((date, mae_error, score))
+        machine.calibrate_model(income[:date], outcome[:date], target[:date])
+    
+    to_print = [f"{date.strftime('%Y-%m-%d')} {error} {score}" for date, error, score in test_scores]
+    with open("test_errors.txt", "w") as f:
+        f.write("\n".join(to_print))
+        
+    # TO DO:
+    # Periodical finetune
+    # Asap Finetune according to razladki points
+    # Refactor Machinery finetune
