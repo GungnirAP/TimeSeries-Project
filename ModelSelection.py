@@ -1,10 +1,11 @@
 import numpy as np
-# import pandas as pd
+import pandas as pd
 
+import pmdarima as pm
 from sklearn.linear_model import LinearRegression, Lasso, Ridge, ElasticNet
 from sklearn.model_selection import GridSearchCV
 
-import pmdarima as pm
+from tqdm import tqdm
 
 class Model:
     def __init__(self, 
@@ -29,7 +30,7 @@ class Model:
         elif self.model_type == "SARIMAX":
             preds = self.model.predict(n_periods=horizon, X=X.drop(columns=self.main_column))
             preds.index = preds.index - pd.Timedelta(days=1)
-        elif self.model_type in ["LinearRegression", "Lasso"]:
+        elif self.model_type == "LinearRegression":
             preds = pd.Series(self.model.predict(pd.DataFrame(X.iloc[-1]).T), index=[X.index[-1]])
         return preds
     
@@ -43,9 +44,6 @@ class Model:
             self.model.fit(series, X.drop(columns=self.main_column))
         elif self.model_type == "LinearRegression":
             self.model = LinearRegression(**self.hyperparameters)
-            self.model.fit(X, y)
-        elif self.model_type == "Lasso":
-            self.model = Lasso(**self.hyperparameters)
             self.model.fit(X, y)
             
         return self.model
@@ -69,31 +67,23 @@ class Model:
             grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=-1)
             grid_GBR.fit(X, y)
             self.hyperparameters = grid_GBR.best_params_
-        elif self.model_type == "Lasso":
-            self.model = Lasso()
-            parameters = {"alpha":np.logspace(-5, 0, 6),
-                          "fit_intercept":[False, True]}
-            grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=-1)
-            grid_GBR.fit(X, y)
-            self.hyperparameters = grid_GBR.best_params_
 
 
 class ModelSelector:
     def __init__(self, scoring, pnl_score):
         self.scoring = scoring
-
-        self.available_models = ["SARIMA", "SARIMAX", "LinearRegression", "Lasso"]
         self.pnl_score = pnl_score
+        self.available_models = ["SARIMA", "SARIMAX", "LinearRegression"]
 
     def select_model(self, X, y, train_index, val_index):
         best_models = {name : Model(name, self.scoring) for name in self.available_models}
 
-        for _, best_model in best_models.items():
-            best_model.optimize_hyperparameters(X[train_index], y[train_index])
-            best_model.fit(X[train_index], y[train_index])
+        for _, best_model in tqdm(best_models.items()):
+            best_model.optimize_hyperparameters(X.loc[train_index], y[train_index])
+            best_model.fit(X.loc[train_index], y[train_index])
 
         all_scores = {name : [] for name in self.available_models}
-        for date in val_index:
+        for date in tqdm(val_index):
             for name, best_model in best_models.items():
                 prediction = best_model.predict(X[:date], horizon=1)
                 score = self.pnl_score(y[date], prediction)
@@ -101,7 +91,7 @@ class ModelSelector:
                 best_model.fit(X[:date], y[:date])
 
         best_score, best_type, best_hyperparameters = -1, None, None
-        for name, scores in all_scores:
+        for name, scores in tqdm(all_scores.items()):
             score = np.array(scores).mean()
             if score > best_score:
                 best_type = name
