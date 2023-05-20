@@ -14,8 +14,8 @@ from sklearn.metrics import make_scorer, mean_absolute_error as MAE
 
 from Preprocessing import Preprocessing
 from Anomalies import AnomalyDetector
-# from FeatureEngineering import FeatureEngineering
-# from FeatureSelection import FeatureSelector
+from FeatureEngineering import FeatureEngineering
+from FeatureSelection import FeatureSelector
 from ModelSelection import ModelSelector
 
 
