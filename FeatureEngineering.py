@@ -81,7 +81,7 @@ class FeatureEngineering():
                 self.list_of_custom_fe[f'fourier_{func}_{order}'] = \
                                     getattr(np, func)(2 * np.pi * self.series * order / fourier_period)
             
-    def auto_fe(self):
+    def auto_fe(self, relevant_columns):
         # use tsfresh
         tmp = pd.DataFrame(list(self.series), columns=['Balance']).reset_index(drop=True).reset_index()
         tmp['index'] = tmp['index'].astype(object)
@@ -93,14 +93,18 @@ class FeatureEngineering():
         
         # Remove duplicates
         extracted_features = extracted_features.T.drop_duplicates().T
-        relevant_features = set()
 
-        for label in tqdm(self.target.unique()):
-            series_tmp = self.target == label
-            extracted_features_filtered = select_features(extracted_features, series_tmp)
-            relevant_features = relevant_features.union(set(extracted_features_filtered.columns))
-            
-        self.list_of_auto_fe = dict(extracted_features[list(relevant_features)])
+        if relevant_columns:
+            self.list_of_auto_fe = dict(extracted_features)
+        else:
+            relevant_features = set()
+
+            for label in tqdm(self.target.unique()):
+                series_tmp = self.target == label
+                extracted_features_filtered = select_features(extracted_features, series_tmp)
+                relevant_features = relevant_features.union(set(extracted_features_filtered.columns))
+                
+            self.list_of_auto_fe = dict(extracted_features[list(relevant_features)])
         
         
     def get_features(self, series, target, relevant_columns=[]):
@@ -110,7 +114,7 @@ class FeatureEngineering():
         self.list_of_auto_fe = dict()
         
         self.custom_fe()
-        self.auto_fe()
+        self.auto_fe(relevant_columns)
         features = pd.DataFrame({**self.list_of_custom_fe, **self.list_of_auto_fe})
         # Remove duplicates
         features = pd.concat([pd.DataFrame(list(self.series), columns=['Balance'], 
