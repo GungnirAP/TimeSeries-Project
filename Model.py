@@ -1,16 +1,20 @@
 '''
 Model Description:
 Assumptions:
-    Input time-series is bounded from 2017-01-09 to 2021-03-31.
-    Metrics of model performance are measured for period from 2021-01-01 to 2021-03-30,
-    simulated as it worked in inference mode.
-    Rates are fixed for the whole period (training, validation, testing).
+    - Model predicts for 1-day ahead for the history of income and outcome.
+    - Input time-series is bounded from 2017-01-09 to 2021-03-31.
+    - Metrics of model performance are measured for period from 2021-01-01 to 2021-03-30,
+        simulated as it worked in inference mode.
+    - Rates are fixed for the whole period (training, validation, testing).
 '''
 
 import pandas as pd
 import numpy as np
 from datetime import datetime
 from sklearn.metrics import make_scorer, mean_absolute_error as MAE
+
+from ChangePointDetection import ChangePointDetector
+
 
 from Calendar import RussianBusinessCalendar
 from Preprocessing import Preprocessing
@@ -19,9 +23,8 @@ from FeatureEngineering import FeatureEngineering
 from FeatureSelection import FeatureSelector
 from ModelSelection import ModelSelector
 
-
 class Machinery:
-    def __init__(self, score, scorer, finetune_every=49):
+    def __init__(self, score, scorer, finetune_every=49, k_features=50):
         self.score = score
         self.scorer = scorer
         self.finetune_every = finetune_every
@@ -33,7 +36,7 @@ class Machinery:
         self.anomaly_detector = {"income": AnomalyDetector(),
                                  "outcome": AnomalyDetector(),}
         self.feature_generator = FeatureEngineering()
-        self.feature_selector = FeatureSelector(scoring=scorer, k_folds=5, k_features=50)
+        self.feature_selector = FeatureSelector(scoring=scorer, k_folds=5, k_features=k_features)
         self.model_selector = ModelSelector(scoring=scorer, pnl_score=score)
 
         calendar = RussianBusinessCalendar()
@@ -130,12 +133,26 @@ if __name__ == '__main__':
     income, outcome = df["Income"], df["Outcome"]
     target = (df["Income"] - df["Outcome"]).shift(-1)[:-1]
 
-    pnl_scorer = make_scorer(pnl_score, greater_is_better=True, rates=rates)
     test_scores = []
+    pnl_scorer = make_scorer(pnl_score, greater_is_better=True, rates=rates)
+
+    change_point_detector = ChangePointDetector()
 
     machine = Machinery(score=pnl_score, scorer=pnl_scorer)
     machine.finetune(income[train_dates], outcome[train_dates], target[train_dates])
+
     for date in test_dates:
+        force_finetune = False
+        for series in [income, outcome]:
+            last_chp_date = change_point_detector.detect_changepoint(series[:date])
+            if last_chp_date:
+                if (date - last_chp_date).days < machine.finetune_every:
+                    force_finetune = True
+                    break
+        if force_finetune:
+            machine.finetune_count = machine.finetune_every
+            machine.finetune(income[:date][:-1], outcome[:date][:-1], target[:date][:-1])
+
         prediction = machine.predict(income[:date], outcome[:date], horizon=1)
         score = pnl_score(target[date], prediction)
         mae_error = MAE(target[date], prediction)
@@ -146,6 +163,3 @@ if __name__ == '__main__':
     to_print = [f"{date.strftime('%Y-%m-%d')} {error} {score}" for date, error, score in test_scores]
     with open("test_errors.txt", "w") as f:
         f.write("\n".join(to_print))
-        
-    # TO DO:
-    # Asap Finetune according to razladki points
