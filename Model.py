@@ -101,16 +101,38 @@ class Machinery:
             val_data = val_data.T.drop_duplicates().T
             val_data = val_data[self.features_names]
             self.Model = self.model_selector.select_model(val_data, target, train_index, val_index)
-            self.calibrate_model(val_data, target)
+            self.__calibrate_model(val_data, target)
 
         return self.Model
 
-    def calibrate_model(self, X, y):
-        self.Model.fit(X, y)
+    def __calibrate_model(self, val_data, target):
+        self.Model.fit(val_data, target)
+        return self.Model
+
+    def calibrate_model(self, income, outcome, target):
+        # Preprocessing
+        income = self.preprocessor.preprocess(income)
+        outcome = self.preprocessor.preprocess(outcome)
+        time_series = income - outcome
+
+        anomaly_features = self.generate_irregular_features(time_series, 
+                                                            self.all_irregular_dates, 
+                                                            self.all_irregular_weeks) 
+        new_columns = list(set(self.features_names).difference(set(anomaly_features.columns)))
+        features = self.feature_generator.get_features(time_series, target=[], 
+                                                       relevant_columns=new_columns)    
+        val_data = pd.concat([features, anomaly_features], axis=1)
+        val_data = val_data.T.drop_duplicates().T
+
+        self.Model.fit(val_data, target)
         return self.Model
 
     def predict(self, income, outcome): 
+        # Preprocessing
+        income = self.preprocessor.preprocess(income)
+        outcome = self.preprocessor.preprocess(outcome)
         time_series = income - outcome
+
         anomaly_features = self.generate_irregular_features(time_series, 
                                                             self.all_irregular_dates, 
                                                             self.all_irregular_weeks) 
@@ -171,7 +193,7 @@ if __name__ == '__main__':
             machine.finetune_count = machine.finetune_every
             machine.finetune(income[:date][:-1], outcome[:date][:-1], target[:date][:-1])
 
-        prediction = machine.predict(income[:date])
+        prediction = machine.predict(income[:date], outcome[:date])
         score = pnl_score(target[date], prediction)
         mae_error = MAE(target[date], prediction)
         test_scores.append((date, mae_error, score))
