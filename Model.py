@@ -143,6 +143,9 @@ class Machinery:
         val_data = val_data.T.drop_duplicates().T
         val_data = val_data[self.features_names]
         preds = self.Model.predict(val_data.iloc[-1])
+        date = preds.index[0].date()
+        if (date.weekday() in [5, 6]) or (date in self.holidays):
+            preds[0] = 0
         self.finetune_count += 1
         return preds
 
@@ -169,11 +172,10 @@ if __name__ == '__main__':
     df = df.set_index('Date')
     df.index.name = 'Date'
     
-    train_dates, test_dates = df[:'2020-12-31'].index, df['2021-01-01':'2021-03-31'].index
+    train_dates, test_dates = df[:'2020-12-31'].index, df['2021-01-01':'2021-03-31'].index[:-1]
     income, outcome = df["Income"], df["Outcome"]
     target = (df["Income"] - df["Outcome"]).shift(-1)[:-1]
 
-    test_scores = []
     pnl_scorer = make_scorer(pnl_score, greater_is_better=True, rates=rates)
 
     change_point_detector = ChangePointDetector()
@@ -181,6 +183,8 @@ if __name__ == '__main__':
     machine = Machinery(score=pnl_score, scorer=pnl_scorer)
     machine.finetune(income[train_dates], outcome[train_dates], target[train_dates])
 
+    all_preds = []
+    all_targets = []
     for date in test_dates:
         force_finetune = False
         for series in [income, outcome]:
@@ -194,12 +198,12 @@ if __name__ == '__main__':
             machine.finetune(income[:date][:-1], outcome[:date][:-1], target[:date][:-1])
 
         prediction = machine.predict(income[:date], outcome[:date])
-        score = pnl_score(target[date], prediction)
-        mae_error = MAE(target[date], prediction)
-        test_scores.append((date, mae_error, score))
+        all_preds.append(prediction)
+        all_targets.append(target[date])
         machine.finetune(income[:date], outcome[:date], target[:date])
         machine.calibrate_model(income[:date], outcome[:date], target[:date])
     
-    to_print = [f"{date.strftime('%Y-%m-%d')} {error} {score}" for date, error, score in test_scores]
-    with open("test_errors.txt", "w") as f:
-        f.write("\n".join(to_print))
+    output = pd.DataFrame([np.array(all_preds).T[0],  np.array(all_targets)]).T
+    output.columns = ["prediction", "fact"]
+    output.index = test_dates
+    output.to_csv("experiment_result.csv")
