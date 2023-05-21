@@ -1,11 +1,14 @@
 '''
 Model Description:
+    Class Machinery supports automatic refit and 1-day ahead forecasts 
+    for daily saldos of income and outcome. The main part contains the 
+    script of the experiment under the following assumptions.
 Assumptions:
-    - Model predicts for 1-day ahead for the history of income and outcome.
-    - Input time-series is bounded from 2017-01-09 to 2021-03-31.
-    - Metrics of model performance are measured for period from 2021-01-01 to 2021-03-30,
-        simulated as it worked in inference mode.
-    - Rates are fixed for the whole period (training, validation, testing).
+    Model predicts for 1-day ahead for the history of income and outcome.
+    Input time-series is bounded from 2017-01-09 to 2021-03-31.
+    Metrics of model performance are measured for period from 2021-01-01 to 2021-03-30,
+    simulated as it worked in inference mode.
+    Rates are fixed for the whole period (training, validation, testing).
 '''
 
 import pandas as pd
