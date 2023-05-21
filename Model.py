@@ -24,11 +24,12 @@ from FeatureSelection import FeatureSelector
 from ModelSelection import ModelSelector
 
 class Machinery:
-    def __init__(self, score, scorer, finetune_every=49, k_features=50):
+    def __init__(self, score, scorer, finetune_every=49, k_features=50, n_jobs=None):
         self.score = score
         self.scorer = scorer
         self.finetune_every = finetune_every
         self.finetune_count = finetune_every
+        self.n_jobs = n_jobs
 
         self.Model = None
         self.features_names = None
@@ -37,7 +38,7 @@ class Machinery:
                                  "outcome": AnomalyDetector(),}
         self.feature_generator = FeatureEngineering()
         self.feature_selector = FeatureSelector(scoring=scorer, k_folds=5, k_features=k_features)
-        self.model_selector = ModelSelector(scoring=scorer, pnl_score=score)
+        self.model_selector = ModelSelector(scoring=scorer, pnl_score=score, n_jobs=self.n_jobs)
 
         calendar = RussianBusinessCalendar()
         self.holidays = [date.date() for date in calendar.get_holidays()]
@@ -180,7 +181,7 @@ if __name__ == '__main__':
 
     change_point_detector = ChangePointDetector()
 
-    machine = Machinery(score=pnl_score, scorer=pnl_scorer)
+    machine = Machinery(score=pnl_score, scorer=pnl_scorer, n_jobs=None)
     machine.finetune(income[train_dates], outcome[train_dates], target[train_dates])
 
     all_preds = []

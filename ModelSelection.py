@@ -16,11 +16,13 @@ class Model:
                  model_type="SARIMA", 
                  scoring=None,
                  hyparameters=None,
-                 main_column="Balance"):
+                 main_column="Balance",
+                 n_jobs=None):
         self.main_column = main_column
         self.model_type = model_type
         self.hyperparameters = hyparameters
         self.scoring = scoring
+        self.n_jobs = n_jobs
         self.refit_every = None
         if self.model_type in ["SARIMA", "SARIMAX"]:
             self.refit_every = 1
@@ -113,7 +115,7 @@ class Model:
         elif self.model_type == "LinearRegression":
             self.model = LinearRegression()
             parameters = {"fit_intercept":[False, True]}
-            grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=-1, scoring=self.scoring)
+            grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=self.n_jobs, scoring=self.scoring)
             self.pipeline = StandardScaler()
             self.pipeline.fit(X)
             X =self.pipeline.transform(X)
@@ -123,7 +125,7 @@ class Model:
             self.model = Lasso()
             parameters = {"alpha":np.logspace(-5, 1, 19),
                           "fit_intercept":[False, True]}
-            grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=-1, scoring=self.scoring)
+            grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=self.n_jobs, scoring=self.scoring)
             self.pipeline = StandardScaler()
             self.pipeline.fit(X)
             X =self.pipeline.transform(X)
@@ -134,7 +136,7 @@ class Model:
             parameters = {"alpha":np.logspace(-5, 2, 23),
                          "fit_intercept":[False, True],
                          "solver":["auto", "svd", "cholesky"]}
-            grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=-1, scoring=self.scoring)
+            grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=self.n_jobs, scoring=self.scoring)
             self.pipeline = StandardScaler()
             self.pipeline.fit(X)
             X =self.pipeline.transform(X)
@@ -145,7 +147,7 @@ class Model:
             parameters = {"alpha":np.logspace(-5, 2, 8),
                          "l1_ratio":np.linspace(0, 1, 11),
                          "fit_intercept":[False, True]}
-            grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=-1, scoring=self.scoring)
+            grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=self.n_jobs, scoring=self.scoring)
             self.pipeline = StandardScaler()
             self.pipeline.fit(X)
             X =self.pipeline.transform(X)
@@ -155,7 +157,7 @@ class Model:
             self.model = svm.SVR()
             parameters = {"kernel": ["linear", "poly", "rbf", "sigmoid"],
                          "degree": range(1, 6)}
-            grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=-1, scoring=self.scoring)
+            grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=self.n_jobs, scoring=self.scoring)
             self.pipeline = StandardScaler()
             self.pipeline.fit(X)
             X = self.pipeline.transform(X)
@@ -165,28 +167,29 @@ class Model:
             self.model = GradientBoostingRegressor()
             parameters = {"learning_rate":np.logspace(-2,0,3),
                          "n_estimators":range(20, 101, 20)}
-            grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=-1, scoring=self.scoring)
+            grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=self.n_jobs, scoring=self.scoring)
             grid_GBR.fit(X, y)
             self.hyperparameters = grid_GBR.best_params_
         elif self.model_type == "RandomForestRegressor":
             self.model = RandomForestRegressor()
             parameters = {"n_estimators":range(20, 101, 20)}
-            grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=-1, scoring=self.scoring)
+            grid_GBR = GridSearchCV(estimator=self.model, param_grid = parameters, cv = 5, n_jobs=self.n_jobs, scoring=self.scoring)
             grid_GBR.fit(X, y)
             self.hyperparameters = grid_GBR.best_params_
         
 
 class ModelSelector:
-    def __init__(self, scoring, pnl_score):
+    def __init__(self, scoring, pnl_score, n_jobs=None):
         self.scoring = scoring
         self.pnl_score = pnl_score
         self.available_models = ["SARIMA", "SARIMAX", "LinearRegression", "Lasso", "Ridge"
                                  , "ElasticNet", "SVM", "GradientBoostingRegressor"
                                  , "RandomForestRegressor"]
+        self.n_jobs = n_jobs
 
 
     def select_model(self, X, y, train_index, val_index):
-        best_models = {name : Model(name, self.scoring) for name in self.available_models}
+        best_models = {name : Model(name, self.scoring, n_jobs=self.n_jobs) for name in self.available_models}
 
         for _, best_model in tqdm(best_models.items()):
             best_model.optimize_hyperparameters(X.loc[train_index], y[train_index])
