@@ -17,6 +17,7 @@ from Calendar import RussianBusinessCalendar
 class FeatureEngineering():
     def __init__(self):
         self.series = None
+        self.target = None
         self.list_of_custom_fe = dict()
         self.list_of_auto_fe = dict()
         
@@ -93,21 +94,18 @@ class FeatureEngineering():
         # Remove duplicates
         extracted_features = extracted_features.T.drop_duplicates().T
         relevant_features = set()
-        
-        # match tomorrow balance and current data
-        target = self.series.shift(-1)[:-1]
-        extracted_features = extracted_features.iloc[:-1]
 
-        for label in tqdm(target.unique()):
-            series_tmp = target == label
+        for label in tqdm(self.target.unique()):
+            series_tmp = self.target == label
             extracted_features_filtered = select_features(extracted_features, series_tmp)
             relevant_features = relevant_features.union(set(extracted_features_filtered.columns))
             
         self.list_of_auto_fe = dict(extracted_features[list(relevant_features)])
         
         
-    def get_features(self, series, relevant_columns=[]):
+    def get_features(self, series, target, relevant_columns=[]):
         self.series = series
+        self.target = target
         self.list_of_custom_fe = dict()
         self.list_of_auto_fe = dict()
         
