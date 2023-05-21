@@ -43,6 +43,9 @@ class Machinery:
         self.holidays = [date.date() for date in calendar.get_holidays()]
         self.holidays.append(datetime.strptime('10-11-2017', "%d-%m-%Y").date())
         self.holidays.append(datetime.strptime('10-10-2018', "%d-%m-%Y").date())
+
+        self.all_irregular_dates = None
+        self.all_irregular_weeks = None
         
 
     def generate_irregular_features(self, time_series, irregular_dates, irregular_weeks):
@@ -78,6 +81,8 @@ class Machinery:
             all_irregular_dates = all_irregular_dates.union(set(self.anomaly_detector["outcome"].irregular_dates))
             all_irregular_weeks = self.anomaly_detector["income"].irregular_weeks
             anomaly_features = self.generate_irregular_features(income[train_index], all_irregular_dates, all_irregular_weeks)     
+            self.all_irregular_dates = all_irregular_dates
+            self.all_irregular_weeks = all_irregular_weeks
 
             # Feature Engineering
             features = self.feature_generator.get_features(time_series[train_index], target[train_index])
@@ -104,10 +109,20 @@ class Machinery:
         self.Model.fit(X, y)
         return self.Model
 
-    def predict(self, income, outcome):
-        # 
+    def predict(self, income, outcome): 
+        time_series = income - outcome
+        anomaly_features = self.generate_irregular_features(time_series, 
+                                                            self.all_irregular_dates, 
+                                                            self.all_irregular_weeks) 
+        new_columns = list(set(self.features_names).difference(set(anomaly_features.columns)))
+        features = self.feature_generator.get_features(time_series, target=[], 
+                                                       relevant_columns=new_columns)    
+        val_data = pd.concat([features, anomaly_features], axis=1)
+        val_data = val_data.T.drop_duplicates().T
+        # val_data = val_data[self.features_names]
+        preds = self.Model.predict(val_data.iloc[-1])
         self.finetune_count += 1
-        return self.Model.predict(X)
+        return preds
 
 
 def pnl_score(y_true, y_predict, 
