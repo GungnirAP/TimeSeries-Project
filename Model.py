@@ -45,7 +45,7 @@ class Machinery:
         self.holidays.append(datetime.strptime('10-10-2018', "%d-%m-%Y").date())
         
 
-    def __generate_irregular_features(self, time_series, irregular_dates, irregular_weeks):
+    def generate_irregular_features(self, time_series, irregular_dates, irregular_weeks):
         data = pd.DataFrame(time_series, columns=["val"])
         data['date'] = data.index.date
         data['week_day'] = data['date'].apply(lambda x: x.weekday())
@@ -77,7 +77,7 @@ class Machinery:
             all_irregular_dates = set(self.anomaly_detector["income"].irregular_dates)
             all_irregular_dates = all_irregular_dates.union(set(self.anomaly_detector["outcome"].irregular_dates))
             all_irregular_weeks = self.anomaly_detector["income"].irregular_weeks
-            anomaly_features = self.__generate_irregular_features(income[train_index], all_irregular_dates, all_irregular_weeks)     
+            anomaly_features = self.generate_irregular_features(income[train_index], all_irregular_dates, all_irregular_weeks)     
 
             # Feature Engineering
             features = self.feature_generator.get_features(time_series[train_index], target[train_index])
@@ -88,7 +88,7 @@ class Machinery:
             self.features_names = self.feature_selector.select_features(train_data, target[train_index])
 
             # Model Selection
-            anomaly_features = self.__generate_irregular_features(income, all_irregular_dates, all_irregular_weeks)     
+            anomaly_features = self.generate_irregular_features(income, all_irregular_dates, all_irregular_weeks)     
             features = self.feature_generator.get_features(time_series, target)
             val_data = pd.concat([features, anomaly_features], axis=1)
             val_data = val_data.T.drop_duplicates().T
