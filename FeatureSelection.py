@@ -132,6 +132,6 @@ class FeatureSelector():
             scores_by_method[method] = score
 
         best_method = sorted(scores_by_method.items(), key=lambda x:x[1])[-1][0]
-        fsg = FeatureSubsetGenerator(features, target)
+        fsg = FeatureSubsetGenerator(features, target, k_features=self.k_features)
         class_method = getattr(fsg, best_method)
         return class_method()
