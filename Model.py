@@ -123,7 +123,7 @@ class Machinery:
                                                        relevant_columns=new_columns)    
         val_data = pd.concat([features, anomaly_features], axis=1)
         val_data = val_data.T.drop_duplicates().T
-
+        val_data = val_data[self.features_names]
         self.Model.fit(val_data, target)
         return self.Model
 
@@ -141,7 +141,7 @@ class Machinery:
                                                        relevant_columns=new_columns)    
         val_data = pd.concat([features, anomaly_features], axis=1)
         val_data = val_data.T.drop_duplicates().T
-        # val_data = val_data[self.features_names]
+        val_data = val_data[self.features_names]
         preds = self.Model.predict(val_data.iloc[-1])
         self.finetune_count += 1
         return preds
