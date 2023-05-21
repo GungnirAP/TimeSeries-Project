@@ -115,7 +115,7 @@ class FeatureEngineering():
         # Remove duplicates
         features = pd.concat([pd.DataFrame(list(self.series), columns=['Balance'], 
                                            index=self.series.index), features], axis=1)
-        features = features.T.drop_duplicates().T
+        features = features.T.drop_duplicates(keep="first").T
         if relevant_columns:
             features = features[relevant_columns]
         return features

@@ -86,7 +86,9 @@ class Machinery:
 
             # Feature selection
             self.features_names = self.feature_selector.select_features(train_data, target[train_index])
-
+            if "Balance" not in self.features_names:
+                self.features_names = np.append(self.features_names, "Balance")
+            
             # Model Selection
             anomaly_features = self.generate_irregular_features(income, all_irregular_dates, all_irregular_weeks)     
             features = self.feature_generator.get_features(time_series, target)
@@ -102,7 +104,8 @@ class Machinery:
         self.Model.fit(X, y)
         return self.Model
 
-    def predict(self, X):
+    def predict(self, income, outcome):
+        # 
         self.finetune_count += 1
         return self.Model.predict(X)
 
@@ -129,7 +132,7 @@ if __name__ == '__main__':
     df = df.set_index('Date')
     df.index.name = 'Date'
     
-    train_dates, test_dates = df[:'2021-01-01'].index, df['2021-01-01':'2021-03-31'].index
+    train_dates, test_dates = df[:'2020-12-31'].index, df['2021-01-01':'2021-03-31'].index
     income, outcome = df["Income"], df["Outcome"]
     target = (df["Income"] - df["Outcome"]).shift(-1)[:-1]
 
@@ -153,7 +156,7 @@ if __name__ == '__main__':
             machine.finetune_count = machine.finetune_every
             machine.finetune(income[:date][:-1], outcome[:date][:-1], target[:date][:-1])
 
-        prediction = machine.predict(income[:date], outcome[:date], horizon=1)
+        prediction = machine.predict(income[:date])
         score = pnl_score(target[date], prediction)
         mae_error = MAE(target[date], prediction)
         test_scores.append((date, mae_error, score))
