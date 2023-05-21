@@ -72,7 +72,7 @@ class Machinery:
         anomaly_features = self.__generate_irregular_features(income[train_index], all_irregular_dates, all_irregular_weeks)     
 
         # Feature Engineering
-        features = self.feature_generator.get_features(time_series[train_index])
+        features = self.feature_generator.get_features(time_series[train_index], target[train_index])
         train_data = pd.concat([features, anomaly_features], axis=1)
         train_data = train_data.T.drop_duplicates().T
 
@@ -81,13 +81,13 @@ class Machinery:
 
         # Model Selection
         anomaly_features = self.__generate_irregular_features(income, all_irregular_dates, all_irregular_weeks)     
-        features = self.feature_generator.get_features(time_series)
+        features = self.feature_generator.get_features(time_series, target)
         val_data = pd.concat([features, anomaly_features], axis=1)
         val_data = val_data.T.drop_duplicates().T
         val_data = val_data[self.features_names]
         self.Model = self.model_selector.select_model(val_data, target, train_index, val_index)
         self.calibrate_model(val_data, target)
-        
+
         return self.Model
 
     def calibrate_model(self, X, y):
