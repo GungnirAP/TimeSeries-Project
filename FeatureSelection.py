@@ -113,7 +113,7 @@ class FeatureSelector():
             k_avg = 0
 
             for i in range(self.k_folds):
-                fsg = FeatureSubsetGenerator(list_of_samples[i], list_of_targets[i])
+                fsg = FeatureSubsetGenerator(list_of_samples[i], list_of_targets[i], k_features=self.k_features)
                 class_method = getattr(fsg, method)
                 chosen_features.append(class_method())
                 k_avg += len(chosen_features[-1])
