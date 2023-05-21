@@ -21,9 +21,11 @@ from ModelSelection import ModelSelector
 
 
 class Machinery:
-    def __init__(self, score, scorer):
+    def __init__(self, score, scorer, finetune_every=49):
         self.score = score
         self.scorer = scorer
+        self.finetune_every = finetune_every
+        self.finetune_count = finetune_every
 
         self.Model = None
         self.features_names = None
@@ -55,38 +57,41 @@ class Machinery:
         return data
 
     def finetune(self, income, outcome, target, val_size=49):
-        # Preprocessing
-        income = self.preprocessor.preprocess(income)
-        outcome = self.preprocessor.preprocess(outcome)
-        time_series = income - outcome
+        if self.finetune_count >= self.finetune_every:
+            self.finetune_count = 0
 
-        train_index = income[:-val_size].index
-        val_index = income[-val_size:].index
+            # Preprocessing
+            income = self.preprocessor.preprocess(income)
+            outcome = self.preprocessor.preprocess(outcome)
+            time_series = income - outcome
 
-        # Anomalies detection
-        self.anomaly_detector["income"].fit(income[train_index])
-        self.anomaly_detector["outcome"].fit(outcome[train_index])
-        all_irregular_dates = set(self.anomaly_detector["income"].irregular_dates)
-        all_irregular_dates = all_irregular_dates.union(set(self.anomaly_detector["outcome"].irregular_dates))
-        all_irregular_weeks = self.anomaly_detector["income"].irregular_weeks
-        anomaly_features = self.__generate_irregular_features(income[train_index], all_irregular_dates, all_irregular_weeks)     
+            train_index = income[:-val_size].index
+            val_index = income[-val_size:].index
 
-        # Feature Engineering
-        features = self.feature_generator.get_features(time_series[train_index], target[train_index])
-        train_data = pd.concat([features, anomaly_features], axis=1)
-        train_data = train_data.T.drop_duplicates().T
+            # Anomalies detection
+            self.anomaly_detector["income"].fit(income[train_index])
+            self.anomaly_detector["outcome"].fit(outcome[train_index])
+            all_irregular_dates = set(self.anomaly_detector["income"].irregular_dates)
+            all_irregular_dates = all_irregular_dates.union(set(self.anomaly_detector["outcome"].irregular_dates))
+            all_irregular_weeks = self.anomaly_detector["income"].irregular_weeks
+            anomaly_features = self.__generate_irregular_features(income[train_index], all_irregular_dates, all_irregular_weeks)     
 
-        # Feature selection
-        self.features_names = self.feature_selector.select_features(train_data, target[train_index])
+            # Feature Engineering
+            features = self.feature_generator.get_features(time_series[train_index], target[train_index])
+            train_data = pd.concat([features, anomaly_features], axis=1)
+            train_data = train_data.T.drop_duplicates().T
 
-        # Model Selection
-        anomaly_features = self.__generate_irregular_features(income, all_irregular_dates, all_irregular_weeks)     
-        features = self.feature_generator.get_features(time_series, target)
-        val_data = pd.concat([features, anomaly_features], axis=1)
-        val_data = val_data.T.drop_duplicates().T
-        val_data = val_data[self.features_names]
-        self.Model = self.model_selector.select_model(val_data, target, train_index, val_index)
-        self.calibrate_model(val_data, target)
+            # Feature selection
+            self.features_names = self.feature_selector.select_features(train_data, target[train_index])
+
+            # Model Selection
+            anomaly_features = self.__generate_irregular_features(income, all_irregular_dates, all_irregular_weeks)     
+            features = self.feature_generator.get_features(time_series, target)
+            val_data = pd.concat([features, anomaly_features], axis=1)
+            val_data = val_data.T.drop_duplicates().T
+            val_data = val_data[self.features_names]
+            self.Model = self.model_selector.select_model(val_data, target, train_index, val_index)
+            self.calibrate_model(val_data, target)
 
         return self.Model
 
@@ -95,6 +100,7 @@ class Machinery:
         return self.Model
 
     def predict(self, X):
+        self.finetune_count += 1
         return self.Model.predict(X)
 
 
@@ -134,6 +140,7 @@ if __name__ == '__main__':
         score = pnl_score(target[date], prediction)
         mae_error = MAE(target[date], prediction)
         test_scores.append((date, mae_error, score))
+        machine.finetune(income[:date], outcome[:date], target[:date])
         machine.calibrate_model(income[:date], outcome[:date], target[:date])
     
     to_print = [f"{date.strftime('%Y-%m-%d')} {error} {score}" for date, error, score in test_scores]
@@ -141,5 +148,4 @@ if __name__ == '__main__':
         f.write("\n".join(to_print))
         
     # TO DO:
-    # Periodical finetune
     # Asap Finetune according to razladki points

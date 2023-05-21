@@ -111,9 +111,10 @@ class FeatureEngineering():
         
         self.custom_fe()
         self.auto_fe()
-        features = pd.DataFrame({**self.list_of_custom_fe, **self.list_of_auto_fe}).iloc[:-1]
+        features = pd.DataFrame({**self.list_of_custom_fe, **self.list_of_auto_fe})
         # Remove duplicates
-        features = pd.concat([pd.DataFrame(list(self.series[:-1]), columns=['Balance'], index=self.series.index[:-1]), features], axis=1)
+        features = pd.concat([pd.DataFrame(list(self.series), columns=['Balance'], 
+                                           index=self.series.index), features], axis=1)
         features = features.T.drop_duplicates().T
         if relevant_columns:
             features = features[relevant_columns]
