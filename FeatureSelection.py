@@ -64,7 +64,7 @@ class FeatureSubsetGenerator():
             chosen_feature = sorted(mi_cumsum.items(), key=lambda x:x[1])[-1][0]
             chosen_columns[chosen_feature] = self.features[chosen_feature]
             self.filter_features = self.filter_features.drop(columns=chosen_feature)
-
+        del chosen_columns['const']
         return np.array([*chosen_columns.keys()])
     
     # Встроенные – Lasso, Ridge, Elastic Net
